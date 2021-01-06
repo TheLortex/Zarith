@@ -1,0 +1,26 @@
+(env (dev (flags (:standard -w -6))))
+
+(library
+  (name zarith)
+  (public_name zarith)
+  (modules z q big_int_Z zarith_version)
+  (foreign_stubs 
+   (language c) 
+   (names caml_z) 
+   (include_dirs (lib gmp)) 
+   (flags "-DHAS_GMP")
+  )
+  (libraries gmp)
+  (wrapped false))
+
+(library
+ (name zarith_top)
+ (public_name zarith.top)
+ (modules zarith_top)
+ (libraries zarith compiler-libs.toplevel))
+
+(rule 
+ (action (with-stdout-to zarith_version.ml (progn 
+  (run echo "let")
+  (bash "grep \"version\" META | head -1")
+ ))))

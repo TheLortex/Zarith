@@ -1,0 +1,113 @@
+
+; Run test for host
+
+(executable
+ (enabled_if (= %{context_name} default))
+ (name zq)
+ (modules zq)
+ (libraries zarith)
+)
+
+(rule
+ (enabled_if (= %{context_name} default))
+ (action (with-stdout-to zq.output (run ./zq.exe)))
+)
+
+; Run test for Solo5 SPT target
+
+(rule (copy zq.ml zq_freestanding.ml))
+
+(rule (with-stdout-to startup.c (echo """
+#include <solo5.h>
+
+#define CAML_NAME_SPACE
+#include <caml/mlvalues.h>
+#include <caml/memory.h>
+#include <caml/callback.h>
+#include <caml/alloc.h>
+
+static char *unused_argv[] = { \"mirage\", NULL };
+
+void _nolibc_init(uintptr_t heap_start, size_t heap_size); // defined in solo5-libc/sysdeps_solo5.c
+
+int solo5_app_main(const struct solo5_start_info *si) {
+    _nolibc_init(si->heap_start, si->heap_size);
+    caml_startup(unused_argv);
+}
+""")))
+
+(rule (with-stdout-to manifest.json (echo """
+{
+  \"type\": \"solo5.manifest\",
+  \"version\": 1,
+  \"devices\": []
+}
+""")))
+
+(executable 
+ (enabled_if (= %{context_name} freestanding))
+ (name zq_freestanding)
+ (modules zq_freestanding)
+ (libraries zarith)
+ (modes (native object))
+ (foreign_stubs (language c) (names startup manifest))
+)
+
+(rule
+ (enabled_if (= %{context_name} freestanding))
+ (targets manifest.c)
+ (deps manifest.json)
+ (action
+  (run solo5-elftool gen-manifest manifest.json manifest.c)))
+
+(rule
+ (enabled_if (= %{context_name} freestanding))
+ (target ldflags)
+ (action (with-stdout-to %{target} (progn
+  (bash "echo -n \"%{lib:nolibc:libnolibc.a} \" && echo -n \"%{lib:nolibc:libopenlibm.a} \" && solo5-config --target=spt --ldflags")
+ )))
+)
+
+(rule
+ (enabled_if (= %{context_name} freestanding))
+ (target zq.out)
+ (deps zq_freestanding.exe.o)
+ (action
+  (bash
+   "ld zq_freestanding.exe.o -o %{target} %{read:ldflags}")))
+
+; Run solo5 code
+(rule 
+ (enabled_if (= %{context_name} freestanding))
+ (deps zq.out)
+ (action (with-accepted-exit-codes 1 (with-stdout-to zq.output.full (run solo5-spt zq.out))))
+)
+
+; Remove solo5 intro
+(rule 
+ (enabled_if (= %{context_name} freestanding))
+ (deps zq.output.full)
+ (action (with-stdout-to zq.output 
+ (bash "head -n -1 zq.output.full | tail -n +12 -"))
+ ) 
+)
+
+
+; Check results
+
+(rule
+ (alias runtest)
+ (action (diff zq.expected zq.output)))
+
+(rule 
+ (target zq.expected)
+ (enabled_if (= %{arch_sixtyfour} true))
+ (action (copy zq.output64 %{target}))
+)
+
+(rule 
+ (target zq.expected)
+ (enabled_if (= %{arch_sixtyfour} false))
+ (action (copy zq.output32 %{target}))
+)
+
