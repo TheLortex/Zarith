@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.operating-system }}
     steps:
     - uses: actions/checkout@v2
-    - uses: actions-ml/setup-ocaml@master
+    - uses: TheLortex/setup-ocaml-1@fix-permissions
       with:
         ocaml-version: ${{ matrix.ocaml-version }}
     - name: Add mirage-dev repository
@@ -21,9 +21,9 @@ jobs:
     - name: Install ocaml-freestanding, bindings, dune and opam-monorepo
       run: opam install -t -y ocaml-freestanding solo5-bindings-spt dune opam-monorepo
     - name: Run opam-monorepo
-      run: 
-        - opam monorepo lock
-        - opam monorepo pull
+      run: |
+        opam monorepo lock
+        opam monorepo pull
     - name: Compiling example project
       run: opam exec -- dune build --workspace dune-workspace.freestanding
     - name: Running tests
