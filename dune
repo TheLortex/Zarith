@@ -20,6 +20,7 @@
  (libraries zarith compiler-libs.toplevel))
 
 (rule 
+ (deps META)
  (action (with-stdout-to zarith_version.ml (progn 
   (run echo "let")
   (bash "grep \"version\" META | head -1")
